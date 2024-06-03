@@ -24,7 +24,7 @@ class Attendance:
     def use_web_cam(self, frame, face_data):
         faces = self.model.get(frame)
         if len(faces) == 0:
-            return frame, face_data
+            return frame
         for face in faces:
             face_embeddings = face['embedding']
             x, y, w, h = face['bbox']
@@ -38,9 +38,9 @@ class Attendance:
                     face_data['time_out'] = time.time()
         return frame
     
-    def check_attendence(self,image_dir,face_database):
+    def check_attendence(self,image,face_database, image_name):
         # image = cv2.imread(image_dir)
-        face = self.get_embedding(image_dir)
+        face = self.get_embedding(image)
         if face is None:
             # print("No face detected")
             st.write("No face detected")
@@ -56,16 +56,16 @@ class Attendance:
                 continue
         
         if not check:
-            # print("This person is not in the class")
             st.write("This person is not in the class")
-            cv2.imwrite(f"./face_database/{time.time()}.jpg", image)
-            # print(f"Save {time.time()}.jpg") 
-            st.write(f"Save {time.time()}.jpg")
+            cv2.imwrite(f"./face_database/{image_name}.png", image)
+            st.write(f"Save {image_name}.jpg")
+        
+        return check
 
     def use_video(self,frame,face_data):
         faces = self.model.get(frame)
         if len(faces) == 0:
-            return frame, face_data
+            return frame
         for face in faces:
             face_embeddings = face['embedding']
             x, y, w, h = face['bbox']

@@ -4,7 +4,6 @@ import numpy as np
 import os
 import cv2
 import time
-import threading
 from utils import get_data_base, display_time
 from modules.facemodel import Attendance
 
@@ -36,7 +35,7 @@ left_column, right_column = st.columns(2)
 
 with left_column:
     st.header("Source Image")
-    source = st.radio("Get image from", ["Camera", "Upload", "Stored"])
+    source = st.radio("Get image from", ["Camera", "Upload", "Check Attendance", "Show Attendance"])
     if source == "Camera":
         info_displayed = False
         if st.session_state.cap:
@@ -46,14 +45,14 @@ with left_column:
             _, frame = st.session_state.cap.read()
             for face_data in st.session_state.face_database:
                 frame = model.use_web_cam(frame, face_data)
-                # if face_data['time_in'] is not None:
-                if face_data['name'] not in st.session_state.notified_checkin:
-                    info_displayed = False
-                    with right_column:
-                        st.empty()
-                    st.session_state.student_id = face_data['student_id']
-                    st.session_state.student_name = face_data['name']
-                    st.session_state.notified_checkin.add(face_data['name'])
+                if face_data['time_in'] is not None:
+                    if face_data['name'] not in st.session_state.notified_checkin:
+                        info_displayed = False
+                        with right_column:
+                            st.empty()
+                        st.session_state.student_id = face_data['student_id']
+                        st.session_state.student_name = face_data['name']
+                        st.session_state.notified_checkin.add(face_data['name'])
             if not info_displayed:
                 with right_column:
                     st.header("Information")
@@ -76,21 +75,21 @@ with left_column:
                 f.write(video.read())
             st.session_state.cap = cv2.VideoCapture(vid)
         else:
-            st.warning("Vui lòng tải lên video trước.")
+            st.warning("Please upload the video.")
+            st.session_state.cap = None
         info_displayed = False
-        while run:
+        while run and st.session_state.cap.isOpened():
             _, frame = st.session_state.cap.read()
             for face_data in st.session_state.face_database:
                 frame = model.use_video(frame, face_data)
-                # if face_data['time_in'] is not None:
-                if face_data['name'] not in st.session_state.notified_checkin:
-                    info_displayed = False
-                    st.write(f"Student ID: {st.session_state.student_id}")
-                    with right_column:
-                        st.empty()
-                    st.session_state.student_id = face_data['student_id']
-                    st.session_state.student_name = face_data['name']
-                    st.session_state.notified_checkin.add(face_data['name'])
+                if face_data['time_in'] is not None:
+                    if face_data['name'] not in st.session_state.notified_checkin:
+                        info_displayed = False
+                        with right_column:
+                            st.empty()
+                        st.session_state.student_id = face_data['student_id']
+                        st.session_state.student_name = face_data['name']
+                        st.session_state.notified_checkin.add(face_data['name'])
             if not info_displayed:
                 with right_column:
                     st.header("Information")
@@ -102,6 +101,37 @@ with left_column:
                         st.image(image_path, caption=f'Student name: {st.session_state.student_name} (Student ID: {st.session_state.student_id})')
                 info_displayed = True
             FRAME_WINDOW.image(frame)
+    elif source == "Check Attendance":
+        if st.session_state.cap:
+            st.session_state.cap.release()
+
+        name_image = st.text_input("Input name image here")
+        image = st.camera_input("Take a portrait image")
+
+        if image is not None and name_image is not None:
+            bytes_data = image.getvalue()
+            image = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+            if not model.check_attendence(image, st.session_state.face_database, name_image):
+                st.session_state.student_id = name_image.split('_')[1]
+                st.session_state.student_name = name_image.split('_')[0]
+                st.session_state.notified_checkin.add(st.session_state.student_name)
+                embedding = model.get_embedding(image)
+                st.session_state.face_database.append({"name": st.session_state.student_name, "student_id": st.session_state.student_id, "embedding": embedding, "time_in": time.time(), "time_out": None})
+            
+                with right_column:
+                    st.header("Information")
+                    st.empty()
+                    if st.session_state.student_id is not None:
+                        filename = f"{name_image}.png"
+                        image_path = os.path.join(folder, filename)
+                        st.success(f"{st.session_state.student_name} check in successfully")
+                        st.write(f"Student ID: {st.session_state.student_id}")
+                        st.image(image_path, caption=f'Student name: {st.session_state.student_name} (Student ID: {st.session_state.student_id})')
+        else:
+            st.warning("The image name has the form: name_studentid")
+    
+    elif source == "Show Attendance":
+        display_time(st.session_state.face_database)
 
 
 with st.sidebar:
